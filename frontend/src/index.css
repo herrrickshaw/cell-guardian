@@ -1,8 +1,0 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Range input accent colour */
-input[type='range'] {
-  accent-color: #6366f1;
-}

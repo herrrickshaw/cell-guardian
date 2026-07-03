@@ -1,5 +1,0 @@
-# Core
-kiteconnect>=4.1.0
-# upstox-python-sdk>=2.0.0   # uncomment if using Upstox
-# smartapi-python>=1.3.3      # uncomment if using Angel
-# pyotp>=2.9.0                # required for Angel TOTP login
