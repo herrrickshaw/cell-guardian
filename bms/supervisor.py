@@ -146,6 +146,7 @@ class SupervisoryController:
         charge_requested: bool,
         discharge_requested: bool,
         isolation_ok: bool = True,
+        t_cell_min: Optional[float] = None,
     ) -> SupervisorOutput:
         """
         Evaluate one supervisory cycle and advance the state machine.
@@ -166,13 +167,17 @@ class SupervisoryController:
             External command signals.
         isolation_ok : bool
             Isolation monitoring result.
+        t_cell_min : float, optional
+            Coldest cell temperature [°C], used for the under-temperature
+            fault. Defaults to ``t_cell_max`` (single-sensor packs).
 
         Returns
         -------
         SupervisorOutput
         """
         # -- Global fault checks (highest priority) -------------------------
-        fault = self._check_faults(v_cell_max, v_cell_min, t_cell_max, current, isolation_ok)
+        t_min = t_cell_max if t_cell_min is None else t_cell_min
+        fault = self._check_faults(v_cell_max, v_cell_min, t_cell_max, current, isolation_ok, t_min)
         if fault != FaultCode.NONE and self._state not in (BMSState.FAULT, BMSState.SHUTDOWN):
             self._transition(BMSState.FAULT)
             self._fault_code = fault
@@ -351,15 +356,18 @@ class SupervisoryController:
         return alerts
 
     def _check_faults(
-        self, v_max: float, v_min: float, t_max: float, current: float, isolation_ok: bool
+        self, v_max: float, v_min: float, t_max: float, current: float, isolation_ok: bool,
+        t_min: Optional[float] = None,
     ) -> FaultCode:
+        if t_min is None:
+            t_min = t_max
         if v_max > self._OV_FAULT:
             return FaultCode.OVER_VOLTAGE
         if v_min < self._UV_FAULT:
             return FaultCode.UNDER_VOLTAGE
         if t_max > self._T_MAX_FAULT:
             return FaultCode.OVER_TEMPERATURE
-        if t_max < self._T_MIN_FAULT:
+        if t_min < self._T_MIN_FAULT:
             return FaultCode.UNDER_TEMPERATURE
         if not isolation_ok:
             return FaultCode.ISOLATION_FAULT
