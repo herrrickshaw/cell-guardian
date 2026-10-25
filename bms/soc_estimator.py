@@ -85,7 +85,8 @@ class EKFSOCEstimator:
         """
         # ---- Predict ----
         x_pred = self._predict_state(self._x, current, dt)
-        F, H, ocv, r0 = self._cell.get_ekf_matrices(current, dt)
+        # Linearise at the predicted ESTIMATE, never at the plant's true SOC
+        F, H, ocv, r0 = self._cell.get_ekf_matrices(current, dt, soc=float(x_pred[0]))
         P_pred = F @ self._P @ F.T + self._Q
 
         # ---- Update ----
