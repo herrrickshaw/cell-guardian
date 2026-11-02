@@ -14,6 +14,7 @@ Cell balancing logic (mirrors the Stateflow diagram in the whitepaper):
 
 from dataclasses import dataclass
 from typing import List
+
 import numpy as np
 
 

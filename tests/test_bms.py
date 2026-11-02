@@ -5,32 +5,40 @@ Run:
     python -m pytest tests/test_bms.py -v
 """
 
+import os
+import sys
+
 import numpy as np
 import pytest
-import sys
-import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from bms.config import CellConfig, PackConfig, EKFConfig, OCV_SOC_TABLE
-from bms.cell_model import CellModel, ocv_from_soc, docv_dsoc
+from bms.bms_controller import BMSController
+from bms.cell_balancer import CellBalancer
+from bms.cell_model import CellModel, docv_dsoc, ocv_from_soc
+from bms.chemistries import (
+    CHEMISTRY_REGISTRY,
+    LEAD_ACID,
+    LFP,
+    LI_SULFUR,
+    LMFP,
+    LTO,
+    NA_ION,
+    NMC,
+    SOLID_STATE,
+)
+from bms.config import PackConfig
+from bms.power_limits import PowerLimitsCalculator
 from bms.soc_estimator import EKFSOCEstimator
 from bms.soh_estimator import SOHEstimator
-from bms.cell_balancer import CellBalancer
-from bms.power_limits import PowerLimitsCalculator
-from bms.supervisor import SupervisoryController, BMSState, FaultCode, AlertCode
-from bms.bms_controller import BMSController
-from bms.chemistries import (
-    LFP, LEAD_ACID, NMC,
-    NA_ION, LMFP, LTO, LI_SULFUR, SOLID_STATE,
-    CHEMISTRY_REGISTRY,
-)
+from bms.supervisor import AlertCode, BMSState, SupervisoryController
 from bms.thermal import FanController, FanFaultCode
 from bms.vehicles import (
-    TWO_WHEELER, FOUR_WHEELER_RETRO, FOUR_WHEELER_MODERN, ELECTRIC_BUS,
+    ELECTRIC_BUS,
+    FOUR_WHEELER_RETRO,
+    TWO_WHEELER,
     make_bms_controller,
 )
-
 
 # -------------------------------------------------------------------------
 # OCV lookup table
@@ -143,7 +151,7 @@ class TestSOHEstimator:
         assert result.soh_capacity_pct == pytest.approx(100.0, abs=0.01)
 
     def test_capacity_degrades_with_throughput(self):
-        soh = SOHEstimator(nominal_capacity_ah=100.0, degradation_rate=1e-3)
+        SOHEstimator(nominal_capacity_ah=100.0, degradation_rate=1e-3)
         # Simulate 500 equivalent full cycles worth of throughput
         for _ in range(int(500 * 2 * 100 * 3600)):  # would be too slow — just test math
             pass
@@ -664,7 +672,6 @@ class TestColdTemperature:
     def test_lfp_no_fault_at_minus15c(self):
         """LFP t_min_discharge=-20°C → no fault at -15°C (cell self-heats quickly)."""
         from bms.bms_controller import BMSController
-        from bms.config import PackConfig
         pack_cfg = PackConfig(
             cells_series=15, cells_parallel=1,
             balance_v_threshold=0.015, balance_current_a=0.2,
@@ -685,7 +692,6 @@ class TestColdTemperature:
     def test_solid_state_charge_blocked_at_25c(self):
         """Solid-State NMC t_min_charge=30°C → charge power-limit = 0 at 25°C."""
         from bms.bms_controller import BMSController
-        from bms.config import PackConfig
         pack_cfg = PackConfig(
             cells_series=15, cells_parallel=1,
             balance_v_threshold=0.010, balance_current_a=0.5,
@@ -703,7 +709,6 @@ class TestColdTemperature:
     def test_solid_state_charge_allowed_at_40c(self):
         """Solid-State NMC allows charging at 40°C (above t_min_charge=30°C)."""
         from bms.bms_controller import BMSController
-        from bms.config import PackConfig
         pack_cfg = PackConfig(
             cells_series=15, cells_parallel=1,
             balance_v_threshold=0.010, balance_current_a=0.5,
@@ -721,7 +726,6 @@ class TestColdTemperature:
     def test_na_ion_survives_minus25c_discharge(self):
         """Na-Ion t_min_discharge=-30°C → no UNDER_TEMPERATURE fault at -25°C."""
         from bms.bms_controller import BMSController
-        from bms.config import PackConfig
         pack_cfg = PackConfig(
             cells_series=15, cells_parallel=1,
             balance_v_threshold=0.015, balance_current_a=0.2,
@@ -772,7 +776,7 @@ class TestDrivingProfiles:
         assert s_agg > s_gen
 
     def test_highway_more_stress_than_city(self):
-        from bms.driving_profiles import HIGHWAY, CITY, compute_stress_factors
+        from bms.driving_profiles import CITY, HIGHWAY, compute_stress_factors
         _, _, _, s_hwy = compute_stress_factors(HIGHWAY)
         _, _, _, s_city = compute_stress_factors(CITY)
         assert s_hwy > s_city
@@ -895,7 +899,7 @@ class TestManufacturerProfiles:
 
     def test_tesla_lower_r0_than_ather(self):
         """Large CATL prismatic cells have far lower R0 than small 21700 NMC cells."""
-        from bms.manufacturer_profiles import TESLA_MODEL3_SR, ATHER_450X
+        from bms.manufacturer_profiles import ATHER_450X, TESLA_MODEL3_SR
         assert TESLA_MODEL3_SR.cell_config.r0 < ATHER_450X.cell_config.r0
 
     def test_bms_step_ather(self):
@@ -920,8 +924,8 @@ class TestManufacturerProfiles:
     def test_tesla_lower_degradation_stress_than_ather(self):
         """Tesla's liquid cooling and lower pack temp yields lower stress multiplier
         than Ather's air-cooled pack despite similar C-rate."""
-        from bms.manufacturer_profiles import ATHER_DRIVING, TESLA_DRIVING
         from bms.driving_profiles import compute_stress_factors
+        from bms.manufacturer_profiles import ATHER_DRIVING, TESLA_DRIVING
         _, _, _, s_ather = compute_stress_factors(ATHER_DRIVING)
         _, _, _, s_tesla = compute_stress_factors(TESLA_DRIVING)
         # Tesla: avg_temp=28°C, DoD=55%; Ather: avg_temp=35°C, DoD=35%

@@ -33,17 +33,23 @@ To use real Kaggle data (download CSVs first):
     nasa = load_nasa("data/kaggle/nasa_battery/")
 """
 
-from .synthetic import (
-    generate_nasa_battery,
-    generate_degradation,
-    generate_ev_charging,
-    generate_rul_features,
-    generate_bms_telemetry,
-    generate_distributed_bms,
-    DATASET_REGISTRY,
+from .loaders import (
+    load_bms_telemetry,
+    load_degradation,
+    load_ev_charging,
+    load_nasa,
+    load_rul,
 )
-from .loaders import load_nasa, load_degradation, load_ev_charging, load_rul, load_bms_telemetry
-from .validation import validate_bms_model, print_validation_report
+from .synthetic import (
+    DATASET_REGISTRY,
+    generate_bms_telemetry,
+    generate_degradation,
+    generate_distributed_bms,
+    generate_ev_charging,
+    generate_nasa_battery,
+    generate_rul_features,
+)
+from .validation import print_validation_report, validate_bms_model
 
 __all__ = [
     # Synthetic generators
