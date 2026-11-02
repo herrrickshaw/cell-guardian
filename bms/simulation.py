@@ -23,31 +23,58 @@ Run:
     python -m bms.simulation --datasets       # validate against Kaggle datasets
 """
 
+from __future__ import annotations
+
 import argparse
 import os
-import numpy as np
-from typing import List
+from typing import List, Optional
 
-from .bms_controller import BMSController, BMSPackState
-from .vehicles import (
-    TWO_WHEELER, FOUR_WHEELER_RETRO, ELECTRIC_BUS,
-    VehicleProfile, make_bms_controller,
+import numpy as np
+
+from .bms_controller import BMSPackState
+from .driving_profiles import (
+    DRIVING_PROFILES,
+    annual_soh_loss_pct,
+    compute_stress_factors,
+    efc_per_year,
+    months_to_eol,
+    soh_at_month,
 )
 from .manufacturer_profiles import (
-    ATHER_450X, OLA_S1_PRO, TESLA_MODEL3_SR, BYD_HAN_EV,
-    ATHER_DRIVING, OLA_DRIVING, TESLA_DRIVING, BYD_DRIVING,
-    MANUFACTURER_REGISTRY, MANUFACTURER_DRIVING,
+    ATHER_450X,
+    ATHER_DRIVING,
+    BYD_DRIVING,
+    BYD_HAN_EV,
+    OLA_DRIVING,
+    OLA_S1_PRO,
+    TESLA_DRIVING,
+    TESLA_MODEL3_SR,
 )
-from .driving_profiles import (
-    DRIVING_PROFILES, DrivingConditions,
-    compute_stress_factors, efc_per_year,
-    annual_soh_loss_pct, months_to_eol, soh_at_month,
+from .vehicles import (
+    ELECTRIC_BUS,
+    FOUR_WHEELER_RETRO,
+    TWO_WHEELER,
+    VehicleProfile,
+    make_bms_controller,
 )
-
 
 # ---------------------------------------------------------------------------
 # Simulation helpers
 # ---------------------------------------------------------------------------
+
+def _left_aligned_format(widths) -> str:
+    """Return a `str.format` template of left-aligned columns with the given widths."""
+    return "  " + "  ".join(f"{{:<{w}}}" for w in widths)
+
+
+def _soh_marker(soh: float, warn_pct: float, crit_pct: float) -> str:
+    """Table marker: '!' below critical SOH, '~' below warning SOH, else ''."""
+    if soh < crit_pct:
+        return "!"
+    if soh < warn_pct:
+        return "~"
+    return ""
+
 
 def _header(profile: VehicleProfile):
     print(f"\n{profile.summary()}")
@@ -79,7 +106,7 @@ def _simulate_charge_discharge(
     dt: float = 1.0,
     charge_s: int = 5400,
     discharge_s: int = 3600,
-    discharge_current: float = None,
+    discharge_current: Optional[float] = None,
     print_interval: int = 600,
 ) -> List[BMSPackState]:
     """Run a CC-CV charge followed by constant-current discharge."""
@@ -205,6 +232,29 @@ def simulate_electric_bus(**kwargs) -> List[BMSPackState]:
 # Degradation simulation
 # ---------------------------------------------------------------------------
 
+def _degradation_status(soh_q: float, warn_pct: float, crit_pct: float) -> str:
+    """Label a capacity SOH [%] as OK / WARNING / CRITICAL against the pack thresholds."""
+    if soh_q < crit_pct:
+        return "CRITICAL"
+    if soh_q < warn_pct:
+        return "WARNING"
+    return "OK"
+
+
+def _degradation_point(cycle: int, q_nominal: float, r0_fresh_mohm: float,
+                       deg_rate: float, r0_growth_rate: float):
+    """Analytical fade at `cycle`: (soh_q %, usable Ah, soh_r %, aged R0 mΩ, dR0 %)."""
+    # Capacity fade: linear (Wöhler-equivalent simplified model)
+    soh_q = max(0.0, 100.0 * (1.0 - deg_rate * cycle))
+    q_usable = q_nominal * soh_q / 100.0
+
+    # Resistance growth: empirical power-law approximation
+    r0_aged = r0_fresh_mohm * (1.0 + r0_growth_rate * cycle)
+    soh_r = min(100.0, r0_fresh_mohm / r0_aged * 100.0)
+    dr0_pct = (r0_aged - r0_fresh_mohm) / r0_fresh_mohm * 100.0
+    return soh_q, q_usable, soh_r, r0_aged, dr0_pct
+
+
 def simulate_degradation(
     profile: VehicleProfile,
     n_cycles: int = 300,
@@ -261,22 +311,11 @@ def simulate_degradation(
     crit_pct = profile.pack_cfg.soh_critical_pct
 
     for cycle in range(1, n_cycles + 1):
-        # Capacity fade: linear (Wöhler-equivalent simplified model)
-        soh_q = max(0.0, 100.0 * (1.0 - deg_rate * cycle))
-        q_usable = q_nominal * soh_q / 100.0
-
-        # Resistance growth: empirical power-law approximation
-        r0_aged = r0_fresh_mohm * (1.0 + r0_growth_rate * cycle)
-        soh_r = min(100.0, r0_fresh_mohm / r0_aged * 100.0)
-        dr0_pct = (r0_aged - r0_fresh_mohm) / r0_fresh_mohm * 100.0
+        soh_q, q_usable, soh_r, r0_aged, dr0_pct = _degradation_point(
+            cycle, q_nominal, r0_fresh_mohm, deg_rate, r0_growth_rate)
 
         if cycle == 1 or cycle % print_every == 0 or cycle == n_cycles:
-            if soh_q < crit_pct:
-                status = "CRITICAL"
-            elif soh_q < warn_pct:
-                status = "WARNING"
-            else:
-                status = "OK"
+            status = _degradation_status(soh_q, warn_pct, crit_pct)
 
             cols = [
                 f"{cycle:>10d}",
@@ -312,10 +351,53 @@ def simulate_degradation(
 # Cold-temperature simulation
 # ---------------------------------------------------------------------------
 
+def _run_cold_discharge(profile: VehicleProfile, t_amb: float, discharge_current: float,
+                        max_discharge_s: int, soc_init: float) -> dict:
+    """Discharge one pack at ambient `t_amb` until fault / SOC<=5% / timeout; return raw results."""
+    bms = make_bms_controller(profile, soc_init=soc_init, ambient_temp_c=t_amb)
+    t_peak = t_amb
+    fault_str = "-"
+    ah_out = 0.0
+    soc_final = soc_init
+    dis_blocked = False
+    chg_blocked = False
+
+    for tick in range(max_discharge_s):
+        state = bms.step(
+            current=discharge_current, dt=1.0,
+            discharge_requested=True,
+        )
+        t_peak = max(t_peak, state.pack_temp_max_c)
+
+        # Check power limits at first discharging step
+        if tick == 7:  # after INIT+PRECHARGE settle
+            if state.power_limits.i_max_discharge < 1.0:
+                dis_blocked = True
+            if state.power_limits.i_max_charge > -1.0:
+                chg_blocked = True
+
+        if state.fault_active:
+            fault_str = state.fault_description
+            soc_final = state.pack_soc_mean
+            ah_out += discharge_current / 3600.0
+            break
+
+        if state.pack_soc_mean <= 0.05:
+            soc_final = state.pack_soc_mean
+            ah_out += discharge_current / 3600.0
+            break
+
+        soc_final = state.pack_soc_mean
+        ah_out += discharge_current / 3600.0
+
+    return {"t_peak": t_peak, "fault_str": fault_str, "ah_out": ah_out,
+            "soc_final": soc_final, "dis_blocked": dis_blocked, "chg_blocked": chg_blocked}
+
+
 def simulate_cold_temperature(
     profile: VehicleProfile,
-    ambient_temps_c: List[float] = None,
-    discharge_current: float = None,
+    ambient_temps_c: Optional[List[float]] = None,
+    discharge_current: Optional[float] = None,
     max_discharge_s: int = 1800,
     soc_init: float = 0.80,
 ) -> dict:
@@ -367,42 +449,14 @@ def simulate_cold_temperature(
     results = {}
 
     for t_amb in ambient_temps_c:
-        bms = make_bms_controller(profile, soc_init=soc_init, ambient_temp_c=t_amb)
+        run = _run_cold_discharge(profile, t_amb, discharge_current, max_discharge_s, soc_init)
         t_start = t_amb
-        t_peak = t_amb
-        fault_str = "-"
-        ah_out = 0.0
-        soc_final = soc_init
-        dis_blocked = False
-        chg_blocked = False
-
-        for tick in range(max_discharge_s):
-            state = bms.step(
-                current=discharge_current, dt=1.0,
-                discharge_requested=True,
-            )
-            t_peak = max(t_peak, state.pack_temp_max_c)
-
-            # Check power limits at first discharging step
-            if tick == 7:  # after INIT+PRECHARGE settle
-                if state.power_limits.i_max_discharge < 1.0:
-                    dis_blocked = True
-                if state.power_limits.i_max_charge > -1.0:
-                    chg_blocked = True
-
-            if state.fault_active:
-                fault_str = state.fault_description
-                soc_final = state.pack_soc_mean
-                ah_out += discharge_current / 3600.0
-                break
-
-            if state.pack_soc_mean <= 0.05:
-                soc_final = state.pack_soc_mean
-                ah_out += discharge_current / 3600.0
-                break
-
-            soc_final = state.pack_soc_mean
-            ah_out += discharge_current / 3600.0
+        t_peak = run["t_peak"]
+        fault_str = run["fault_str"]
+        ah_out = run["ah_out"]
+        soc_final = run["soc_final"]
+        dis_blocked = run["dis_blocked"]
+        chg_blocked = run["chg_blocked"]
 
         cols = [
             f"{t_amb:>11.1f}",
@@ -427,8 +481,8 @@ def simulate_cold_temperature(
         }
 
     print(f"\n  Note: BMS faults at cell T < {t_min_dis}°C (discharge) / T < {t_min_chg}°C (charge).")
-    print(f"  'DchgBlocked': PowerLimits sets i_max_discharge=0 at t_min_discharge threshold.")
-    print(f"  'ChgBlocked' : PowerLimits sets i_max_charge=0 at t_min_charge threshold.")
+    print("  'DchgBlocked': PowerLimits sets i_max_discharge=0 at t_min_discharge threshold.")
+    print("  'ChgBlocked' : PowerLimits sets i_max_charge=0 at t_min_charge threshold.")
     print(f"  Resistance increases ~0.5%/°C below t_nominal={cell.t_nominal}°C → more voltage sag.\n")
 
     return results
@@ -492,7 +546,7 @@ def simulate_driving_degradation(
     # ---- Profile summary table -------------------------------------------
     h = ["Profile", "C-dis", "T(°C)", "DoD%", "FC%", "StressX", "EFC/yr", "EOL(yr)"]
     w = [24, 7, 7, 6, 5, 9, 8, 9]
-    fmt = "  " + "  ".join(f"{{:<{x}}}" for x in w)
+    fmt = _left_aligned_format(w)
     print(fmt.format(*h))
     print("  " + "-" * 84)
 
@@ -535,11 +589,7 @@ def simulate_driving_degradation(
         for cond in conditions_list:
             soh = max(0.0, 100.0 - results[cond.name]["annual_loss_pct"] * year)
             results[cond.name]["soh_by_year"].append((year, round(soh, 1)))
-            marker = ""
-            if soh < crit_pct:
-                marker = "!"    # critical
-            elif soh < warn_pct:
-                marker = "~"    # warning
+            marker = _soh_marker(soh, warn_pct, crit_pct)
             cell = f"{soh:.1f}{marker}"
             row += f"  {cell:>{col_width}}"
         print(row)
@@ -618,7 +668,7 @@ def simulate_manufacturer_comparison(
             f"{vp.charging_stages}-stage",
         ])
     col_w = [14, 10, 10, 9, 10, 9, 9, 9]
-    fmt = "  " + "  ".join(f"{{:<{w}}}" for w in col_w)
+    fmt = _left_aligned_format(col_w)
     print(fmt.format(*headers))
     print("  " + "-" * 88)
     for r in rows:
@@ -628,7 +678,7 @@ def simulate_manufacturer_comparison(
     print(f"\n  Typical driving conditions & degradation stress (base_rate={base_rate_per_efc*100:.4f}%/EFC):")
     h2 = ["Vehicle", "Driving scenario", "C-dis", "T_pack", "DoD%", "FC%", "Stress×", "EFC/yr", "EOL(yr)"]
     w2 = [14, 32, 7, 7, 6, 5, 9, 8, 9]
-    fmt2 = "  " + "  ".join(f"{{:<{w}}}" for w in w2)
+    fmt2 = _left_aligned_format(w2)
     print(fmt2.format(*h2))
     print("  " + "-" * 106)
 
@@ -667,17 +717,17 @@ def simulate_manufacturer_comparison(
             results[name]["soh_by_year"].append((yr, round(soh, 1)))
             warn = vp.pack_cfg.soh_warning_pct
             crit = vp.pack_cfg.soh_critical_pct
-            marker = "!" if soh < crit else ("~" if soh < warn else "")
+            marker = _soh_marker(soh, warn, crit)
             cell = f"{soh:.1f}{marker}"
             row += f"  {cell:>{col}}"
         print(row)
 
-    print(f"\n  ~ = SOH below warning threshold   ! = below critical threshold")
-    print(f"\n  Key BMS differentiators:")
-    print(f"    Ather 450X  : Cloud-connected ADS; warp/eco modes; air-cooled (hot pack)")
-    print(f"    Ola S1 Pro  : MoveOS 4; liquid cooling reduces pack temp vs Ather")
-    print(f"    Tesla M3 SR : Octovalve thermal; Supercharger V3 (2.8C); trip planning")
-    print(f"    BYD Han EV  : Cell-to-Body (CTB); nail-test safe; 120 kW DC; heat pump\n")
+    print("\n  ~ = SOH below warning threshold   ! = below critical threshold")
+    print("\n  Key BMS differentiators:")
+    print("    Ather 450X  : Cloud-connected ADS; warp/eco modes; air-cooled (hot pack)")
+    print("    Ola S1 Pro  : MoveOS 4; liquid cooling reduces pack temp vs Ather")
+    print("    Tesla M3 SR : Octovalve thermal; Supercharger V3 (2.8C); trip planning")
+    print("    BYD Han EV  : Cell-to-Body (CTB); nail-test safe; 120 kW DC; heat pump\n")
 
     return results
 
@@ -698,7 +748,7 @@ def print_comparison_table():
         ["Electric Bus",        "LFP",       "128S2P", "409V",   "163.8 kWh","150 kW",  "CC-CV"],
     ]
     col_w = [22, 12, 8, 8, 11, 9, 14]
-    fmt = "  " + "  ".join(f"{{:<{w}}}" for w in col_w)
+    fmt = _left_aligned_format(col_w)
     print(fmt.format(*headers))
     print("  " + "-" * 88)
     for r in rows:
@@ -733,8 +783,8 @@ def print_comparison_table():
 
 def _plot(histories: dict, output_dir: str = "reports"):
     try:
-        import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec
+        import matplotlib.pyplot as plt
     except ImportError:
         print("matplotlib not installed — skipping plots.")
         return
@@ -829,7 +879,11 @@ def main():
         return
 
     if args.datasets:
-        from .datasets import load_all_synthetic, validate_bms_model, print_validation_report
+        from .datasets import (
+            load_all_synthetic,
+            print_validation_report,
+            validate_bms_model,
+        )
         print("\n  Generating synthetic Kaggle dataset equivalents...")
         datasets = load_all_synthetic()
         print(f"  Datasets ready: {list(datasets.keys())}")
