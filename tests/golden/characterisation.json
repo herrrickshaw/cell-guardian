@@ -1,0 +1,177 @@
+{
+ "2w": {
+  "ret": {
+   "n": 6001,
+   "sha": "9d0698397e44b9bb8c84930b519510604a29e55bc6de635032d4be1d9e05ab26"
+  },
+  "stdout_len": 1758,
+  "stdout_sha": "d6332a9116208f739814a81a4a4fc0a8ae6acced2d414245e6904f0ccd9e4231"
+ },
+ "4w": {
+  "ret": {
+   "n": 38541,
+   "sha": "88049436bb4d29e3220161b14def9b02db7c9959688e14d788f14efbe0c6534f"
+  },
+  "stdout_len": 1790,
+  "stdout_sha": "04da4777b6f5e1d926d9e0ad9cb6d3952d9576e3919512d198d8e3bdc4f2d87f"
+ },
+ "bus": {
+  "ret": {
+   "n": 6618,
+   "sha": "28c92f99cdc7b253369a479f9b370bba80ed1aeeba7e8b25959887faa531224a"
+  },
+  "stdout_len": 1890,
+  "stdout_sha": "10ce3a84bdd0707c6b8fa5f8b6e2758c3edae91552e7874d0e36d11d6e001900"
+ },
+ "cold_2w": {
+  "ret": "8e393c08678d3a9a6d6d6c4a7ddde33cd7aea620a53329334a63d05ff284d788",
+  "stdout_len": 1336,
+  "stdout_sha": "9688e03312d74e821704e16a1c23fab98f2ac22375f775ef78943a9f16bbdd75"
+ },
+ "datasets": {
+  "ret": {
+   "bms_telemetry": {
+    "cols": [
+     "timestamp_s",
+     "cell_id",
+     "voltage_v",
+     "current_a",
+     "temperature_c",
+     "soc_pct",
+     "status",
+     "fault_code",
+     "balancing_active"
+    ],
+    "n": 54000,
+    "sha": "52e7a2c839c7ad4429531bb2a9cacb3524af96650666b6c9f311cb831a763cf3"
+   },
+   "degradation": {
+    "cols": [
+     "cycle",
+     "voltage_avg_v",
+     "current_avg_a",
+     "temp_avg_c",
+     "capacity_ah",
+     "soh_pct",
+     "r0_mohm",
+     "rul"
+    ],
+    "n": 300,
+    "sha": "d9cfdced513140c77ce475482114cbeb1ef1c6ff5bf8768bf6db5c42f2704aa4"
+   },
+   "distributed_bms": {
+    "cols": [
+     "timestamp_s",
+     "module_id",
+     "cell_id",
+     "voltage_v",
+     "current_a",
+     "temp_c",
+     "soc_pct",
+     "soh_pct",
+     "power_kw",
+     "alert"
+    ],
+    "n": 57600,
+    "sha": "bae5babda7394d46f5af39e2e1d32ede994cf31b611201bb936f6075377bfdce"
+   },
+   "ev_charging": {
+    "cols": [
+     "timestamp_s",
+     "session_id",
+     "voltage_v",
+     "current_a",
+     "temperature_c",
+     "soc_pct",
+     "power_kw",
+     "energy_kwh",
+     "charge_rate",
+     "phase"
+    ],
+    "n": 3479,
+    "sha": "0145c74250612fb07b4cb98fee08a041de8afe4964c627097cc5cc3dd3bdb050"
+   },
+   "nasa_battery": {
+    "cols": [
+     "cycle",
+     "battery_id",
+     "step_type",
+     "step_time_s",
+     "voltage_v",
+     "current_a",
+     "temperature_c",
+     "capacity_ah",
+     "soh_pct",
+     "rul"
+    ],
+    "n": 100800,
+    "sha": "5772c83ed73c4130961ef3037dceff684d14e98bd7a0343418a0b238e69a33ac"
+   },
+   "rul_features": {
+    "cols": [
+     "cycle",
+     "min_voltage_v",
+     "max_voltage_v",
+     "avg_voltage_v",
+     "avg_current_a",
+     "min_temp_c",
+     "avg_temp_c",
+     "max_temp_c",
+     "capacity_ah",
+     "rul"
+    ],
+    "n": 500,
+    "sha": "7e916e8a4d7d0a936773e0b6a87c95456d10426da0706e2f053dd27112dda35d"
+   }
+  },
+  "stdout_len": 0,
+  "stdout_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+ },
+ "deg_2w": {
+  "ret": "208ad9bb8289adbbe77290e9ecd3a4be212eb17ccfd93d69f87b2dd62fac2f3e",
+  "stdout_len": 1742,
+  "stdout_sha": "d265a3210a5d5e63b04f1f3c1a6cbeadf2f44d330882f7f7fcee6f00d8e24aeb"
+ },
+ "deg_bus": {
+  "ret": "000dd740baf1583292ae63a8967449b16ea7175224dc08ee5647a3391d7eddc9",
+  "stdout_len": 1737,
+  "stdout_sha": "495d41b409a26c93ae8976c91dd1436bc75506d25587619cd32a702729fc6f70"
+ },
+ "driving_2w": {
+  "ret": "85a71cd8fe4d0a53dc3f97aefd2b1e4d86aa26a33e9bdb16688d41ff98dc4489",
+  "stdout_len": 2824,
+  "stdout_sha": "131db5f2caca055f469ccf3ef2daeee074a18c03b09f63ec327e851df50e6723"
+ },
+ "driving_bus": {
+  "ret": "85a71cd8fe4d0a53dc3f97aefd2b1e4d86aa26a33e9bdb16688d41ff98dc4489",
+  "stdout_len": 2819,
+  "stdout_sha": "296eb5f1a81b7b06a187ebde7caae963c5b182511b77e6e62511471b848f88f0"
+ },
+ "loaders": {
+  "ret": {
+   "load_bms_telemetry": 54000,
+   "load_degradation": 300,
+   "load_distributed_bms": 57600,
+   "load_ev_charging": 3479,
+   "load_nasa": 100800,
+   "load_rul": 500
+  },
+  "stdout_len": 334,
+  "stdout_sha": "f865ced293d958431237cf7114c7a5012b4f742d73b9589d26fb70903c5b6733"
+ },
+ "manuf": {
+  "ret": "e9a6f98dbd882daff3ce4ef1f5d7df1e70136b5d59e3fffbf741a3c86274f47d",
+  "stdout_len": 2779,
+  "stdout_sha": "075e2b926e8af267f9416d4503ce132e5a5a0e7c2bc4f210e9aa191f24d1a7e7"
+ },
+ "table": {
+  "ret": "dc937b59892604f5a86ac96936cd7ff09e25f18ae6b758e8014a24c7fa039e91",
+  "stdout_len": 1974,
+  "stdout_sha": "8668e0ec5b513dec7af35f9ca135517ae2bde049bf0afc1d74fbf5dc1ca05c93"
+ },
+ "validation": {
+  "ret": "f2ec347668b92f9f9034da0c24baa388c8cd6f1ce1db5fb871d86b35eb1ee98f",
+  "stdout_len": 2432,
+  "stdout_sha": "6ff95614c6ee7c4ac4945f1204fea4cae5e6042c4579d12d31c8048ceb851e84"
+ }
+}

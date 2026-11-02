@@ -29,3 +29,7 @@ uploads/
 .env.providers
 .env
 data/kaggle/bms_v21/BMS-Datav2/*.npy
+
+# virtualenv; tracked test fixtures are the exception to the *.json rule above
+.venv/
+!tests/golden/*.json
