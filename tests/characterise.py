@@ -32,6 +32,19 @@ def _history_digest(history) -> dict:
     return {"n": len(history), "sha": _sha("\n".join(rows))}
 
 
+def _normalise(obj):
+    """Round floats to 9 significant digits so digests survive numpy/pandas version drift."""
+    if isinstance(obj, dict):
+        return {k: _normalise(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_normalise(v) for v in obj]
+    if isinstance(obj, float):
+        return float(f"{obj:.9g}")
+    if hasattr(obj, "item"):
+        return _normalise(obj.item())
+    return obj
+
+
 def _digest(ret):
     if isinstance(ret, list) and ret and hasattr(ret[0], "pack_soc_mean"):
         return _history_digest(ret)
@@ -56,7 +69,7 @@ def _cases(include_slow: bool) -> Dict[str, Callable[[], object]]:
     def validation():
         res = validate_bms_model(load_all_synthetic())
         print_validation_report(res)
-        return _sha(repr(res))
+        return _sha(repr(_normalise(res)))
 
     def loader_rows():
         names = ["load_nasa", "load_degradation", "load_ev_charging", "load_rul",
