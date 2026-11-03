@@ -180,13 +180,7 @@ class BMSController:
         """
         self._time += dt
 
-        # Step each cell model; add bypass current for cells being balanced
-        cell_states = []
-        for i, (cell, ekf) in enumerate(zip(self._cells, self._ekf)):
-            bypass_i = self._balancer.effective_current(i)
-            effective_i = current + bypass_i
-            state = cell.step(effective_i, dt, self._ambient)
-            cell_states.append(state)
+        cell_states = self._step_cells(current, dt)
 
         # Collect cell voltages and temperatures
         v_cells = [s.v_terminal for s in cell_states]
@@ -201,10 +195,7 @@ class BMSController:
         # Pack-level aggregates
         pack_voltage = sum(v_cells)
         pack_soc_mean = float(np.mean(soc_estimates))
-        pack_soc_min = float(np.min(soc_estimates))
-        pack_soc_max = float(np.max(soc_estimates))
         t_max = float(np.max(t_cells))
-        t_min = float(np.min(t_cells))
 
         # SOH estimation (uses weakest cell = min voltage)
         soh_state = self._soh.update(current, float(np.min(v_cells)), dt)
@@ -239,16 +230,33 @@ class BMSController:
         # Thermal management / fan controller
         thermal_state = self._fan.update(temperature=t_max)
 
+        return self._build_pack_state(
+            current, v_cells, t_cells, soc_estimates,
+            soh_state, bal_state, limits, sv_out, thermal_state,
+        )
+
+    def _step_cells(self, current: float, dt: float) -> list:
+        """Step each cell model; add bypass current for cells being balanced."""
+        cell_states = []
+        for i, cell in enumerate(self._cells):
+            bypass_i = self._balancer.effective_current(i)
+            effective_i = current + bypass_i
+            cell_states.append(cell.step(effective_i, dt, self._ambient))
+        return cell_states
+
+    def _build_pack_state(self, current, v_cells, t_cells, soc_estimates,
+                          soh_state, bal_state, limits, sv_out, thermal_state) -> BMSPackState:
+        """Assemble the rounded pack-level snapshot from per-cell and subsystem outputs."""
         fault_active = sv_out.fault_code.value != 0
         return BMSPackState(
             timestamp_s=self._time,
-            pack_voltage_v=round(pack_voltage, 4),
+            pack_voltage_v=round(sum(v_cells), 4),
             pack_current_a=current,
-            pack_soc_mean=round(pack_soc_mean, 4),
-            pack_soc_min=round(pack_soc_min, 4),
-            pack_soc_max=round(pack_soc_max, 4),
-            pack_temp_max_c=round(t_max, 2),
-            pack_temp_min_c=round(t_min, 2),
+            pack_soc_mean=round(float(np.mean(soc_estimates)), 4),
+            pack_soc_min=round(float(np.min(soc_estimates)), 4),
+            pack_soc_max=round(float(np.max(soc_estimates)), 4),
+            pack_temp_max_c=round(float(np.max(t_cells)), 2),
+            pack_temp_min_c=round(float(np.min(t_cells)), 2),
             cell_voltages_v=[round(v, 4) for v in v_cells],
             cell_soc_estimates=[round(s, 4) for s in soc_estimates],
             cell_temperatures_c=[round(t, 2) for t in t_cells],
