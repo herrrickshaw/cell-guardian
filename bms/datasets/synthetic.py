@@ -18,14 +18,13 @@ MIT:        LFP/graphite fast-charge study; 124 cells; 150–2300 cycle life.
 Lyten/NMC:  degradation dataset statistics from programmer3 Kaggle page.
 """
 
+from dataclasses import replace as _dc_replace
+
 import numpy as np
 import pandas as pd
-from typing import Optional
 
-from ..chemistries import NMC, LFP
 from ..cell_model import CellModel
-from ..config import CellConfig
-from dataclasses import replace as _dc_replace
+from ..chemistries import LFP, NMC
 
 # ---------------------------------------------------------------------------
 # Shared RNG — pass seed= to each generator for reproducibility

@@ -17,8 +17,9 @@ Resistance SOH:
     SOH_R = (R0_fresh / R0_est) × 100 %
 """
 
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass

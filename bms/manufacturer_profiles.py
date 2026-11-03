@@ -22,10 +22,11 @@ documented in owner surveys, telemetry releases, and press fleet reports.
 """
 
 from dataclasses import replace as _dc_replace
-from .config import CellConfig, PackConfig, DEFAULT_EKF
-from .chemistries import ChemistryProfile, NMC, LFP
-from .vehicles import VehicleProfile
+
+from .chemistries import LFP, NMC, ChemistryProfile
+from .config import DEFAULT_EKF, CellConfig, PackConfig
 from .driving_profiles import DrivingConditions
+from .vehicles import VehicleProfile
 
 
 def _make_chem(base: ChemistryProfile, cell: CellConfig) -> ChemistryProfile:

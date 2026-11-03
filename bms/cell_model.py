@@ -19,10 +19,12 @@ Discrete-time state equations (ZOH exact):
     Vrc2[k+1] = α2 · Vrc2[k] + R2·(1 - α2) · I      α2 = exp(-dt / τ2)
 """
 
-import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
-from .config import CellConfig, OCV_SOC_TABLE, DEFAULT_CELL
+
+import numpy as np
+
+from .config import DEFAULT_CELL, OCV_SOC_TABLE, CellConfig
 
 
 def ocv_from_soc(soc: float, table: np.ndarray = OCV_SOC_TABLE) -> float:

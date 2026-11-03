@@ -20,17 +20,21 @@ Each loader below finds the CSV automatically under its directory.
 Falls back to the synthetic generator if the directory does not exist.
 """
 
-import os
+from __future__ import annotations
+
 import glob
+import os
+from typing import Callable, Optional
+
 import pandas as pd
-from typing import Optional
+
 from .synthetic import (
-    generate_nasa_battery,
-    generate_degradation,
-    generate_ev_charging,
-    generate_rul_features,
     generate_bms_telemetry,
+    generate_degradation,
     generate_distributed_bms,
+    generate_ev_charging,
+    generate_nasa_battery,
+    generate_rul_features,
 )
 
 _BASE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "kaggle")
@@ -42,73 +46,59 @@ def _first_csv(directory: str) -> Optional[str]:
     return hits[0] if hits else None
 
 
+def _load_or_synthesize(
+    tag: str,
+    directory: str,
+    generator: Callable[[], pd.DataFrame],
+    missing_hint: str = "",
+) -> pd.DataFrame:
+    """Read the first CSV under `directory`, else return `generator()` (synthetic data).
+
+    `tag` labels the console message; `missing_hint` is appended to the fallback message.
+    """
+    csv = _first_csv(directory)
+    if csv:
+        df = pd.read_csv(csv)
+        print(f"  [{tag}] loaded real data: {csv}  ({len(df):,} rows)")
+        return df
+    print(f"  [{tag}] real data not found — using synthetic{missing_hint}")
+    return generator()
+
+
 def load_nasa(directory: str = os.path.join(_BASE, "nasa")) -> pd.DataFrame:
     """
     Load the NASA battery dataset.
     Falls back to synthetic if the directory does not exist.
     """
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [nasa] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [nasa] real data not found — using synthetic (run loaders.py download block)")
-    return generate_nasa_battery()
+    return _load_or_synthesize(
+        "nasa", directory, generate_nasa_battery,
+        " (run loaders.py download block)",
+    )
 
 
 def load_degradation(directory: str = os.path.join(_BASE, "degradation")) -> pd.DataFrame:
     """Load the Li-Ion Degradation dataset (cycle-level summaries)."""
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [degradation] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [degradation] real data not found — using synthetic")
-    return generate_degradation()
+    return _load_or_synthesize("degradation", directory, generate_degradation)
 
 
 def load_ev_charging(directory: str = os.path.join(_BASE, "ev_charging")) -> pd.DataFrame:
     """Load the EV Battery Charging dataset."""
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [ev_charging] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [ev_charging] real data not found — using synthetic")
-    return generate_ev_charging()
+    return _load_or_synthesize("ev_charging", directory, generate_ev_charging)
 
 
 def load_rul(directory: str = os.path.join(_BASE, "rul")) -> pd.DataFrame:
     """Load the Battery RUL feature dataset."""
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [rul] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [rul] real data not found — using synthetic")
-    return generate_rul_features()
+    return _load_or_synthesize("rul", directory, generate_rul_features)
 
 
 def load_bms_telemetry(directory: str = os.path.join(_BASE, "bms_v21")) -> pd.DataFrame:
     """Load the BMS v2.1 telemetry dataset."""
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [bms_v21] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [bms_v21] real data not found — using synthetic")
-    return generate_bms_telemetry()
+    return _load_or_synthesize("bms_v21", directory, generate_bms_telemetry)
 
 
 def load_distributed_bms(directory: str = os.path.join(_BASE, "dist_bms")) -> pd.DataFrame:
     """Load the Synthetic Distributed BMS dataset."""
-    csv = _first_csv(directory)
-    if csv:
-        df = pd.read_csv(csv)
-        print(f"  [dist_bms] loaded real data: {csv}  ({len(df):,} rows)")
-        return df
-    print("  [dist_bms] real data not found — using synthetic")
-    return generate_distributed_bms()
+    return _load_or_synthesize("dist_bms", directory, generate_distributed_bms)
 
 
 DOWNLOAD_COMMANDS = """

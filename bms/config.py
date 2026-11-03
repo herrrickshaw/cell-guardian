@@ -6,7 +6,8 @@ Pack topology: 16 cells in series, 1 cell in parallel (16S1P)
 Nominal pack voltage: 51.2 V  (16 × 3.2 V)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
 import numpy as np
 
 

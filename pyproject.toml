@@ -1,0 +1,26 @@
+[project]
+name = "cell-guardian"
+version = "0.1.0"
+description = "Battery management system (EKF SOC/SOH) simulation toolkit with Kaggle-schema validation"
+requires-python = ">=3.9"
+dependencies = ["numpy", "pandas"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+plots = ["matplotlib"]
+
+[tool.setuptools]
+packages = ["bms", "bms.datasets"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: full-length vehicle simulations (~1 min); run with -m slow"]
+addopts = "-m 'not slow'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

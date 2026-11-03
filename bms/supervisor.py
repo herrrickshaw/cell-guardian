@@ -24,9 +24,9 @@ Fault → driver alert system:
 Convention: charge current is negative, discharge current is positive.
 """
 
-from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional, List
+from enum import Enum, auto
+from typing import List
 
 
 class BMSState(Enum):

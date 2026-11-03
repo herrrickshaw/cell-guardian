@@ -19,11 +19,11 @@ Usage
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
-import numpy as np
+from dataclasses import replace as _dc_replace
 
-from .config import CellConfig, PackConfig, EKFConfig, DEFAULT_EKF
-from .chemistries import ChemistryProfile, LFP, LEAD_ACID, NMC
+from .chemistries import LEAD_ACID, LFP, ChemistryProfile
+from .chemistries import ChemistryProfile as _CP
+from .config import DEFAULT_EKF, CellConfig, EKFConfig, PackConfig
 
 
 @dataclass
@@ -167,8 +167,6 @@ TWO_WHEELER = VehicleProfile(
 # ---------------------------------------------------------------------------
 
 # Override lead-acid cell config with paper-specific current limits
-from dataclasses import replace as _dc_replace
-
 _PBA_4W_CELL = _dc_replace(
     LEAD_ACID.cell_config,
     nominal_capacity_ah=130.0,
@@ -177,8 +175,6 @@ _PBA_4W_CELL = _dc_replace(
     i_cc_charge=-10.0,
     i_cv_term=-1.0,
 )
-
-from .chemistries import ChemistryProfile as _CP
 
 _LEAD_ACID_4W = _CP(
     name=LEAD_ACID.name,
