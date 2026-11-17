@@ -12,6 +12,7 @@ The allowed charge current is negative (convention: discharge positive).
 
 import numpy as np
 from dataclasses import dataclass
+from typing import Optional
 from .config import CellConfig, DEFAULT_CELL
 
 
@@ -46,6 +47,7 @@ class PowerLimitsCalculator:
         temperature: float,
         v_pack: float,
         soh_pct: float = 100.0,
+        temperature_min: Optional[float] = None,
     ) -> PowerLimits:
         """
         Compute power limits for the current operating point.
@@ -60,6 +62,9 @@ class PowerLimitsCalculator:
             Pack terminal voltage [V].
         soh_pct : float
             Capacity SOH [%] – reduces limits as cell ages.
+        temperature_min : float, optional
+            Minimum cell temperature [°C] for the cold-side limits.
+            Defaults to ``temperature`` (single-sensor packs).
 
         Returns
         -------
@@ -91,6 +96,7 @@ class PowerLimitsCalculator:
 
         # Temperature derating -----------------------------------------------
         t = temperature
+        t_cold = temperature if temperature_min is None else temperature_min
         temp_factor_dis = 1.0
         temp_factor_chg = 1.0
 
@@ -108,15 +114,15 @@ class PowerLimitsCalculator:
             temp_factor_chg = (cfg.t_max_charge - t) / 5.0
             reasons.append("high-temp-charge-derate")
 
-        if t < cfg.t_min_discharge:
+        if t_cold < cfg.t_min_discharge:
             temp_factor_dis = 0.0
             reasons.append("under-temp-discharge-block")
 
-        if t < cfg.t_min_charge:
+        if t_cold < cfg.t_min_charge:
             temp_factor_chg = 0.0
             reasons.append("under-temp-charge-block")
-        elif t < cfg.t_min_charge + 10.0:
-            temp_factor_chg *= max(0.1, (t - cfg.t_min_charge) / 10.0)
+        elif t_cold < cfg.t_min_charge + 10.0:
+            temp_factor_chg *= max(0.1, (t_cold - cfg.t_min_charge) / 10.0)
             reasons.append("low-temp-charge-derate")
 
         # SOH derating (aged cell can deliver less power safely) ---------------

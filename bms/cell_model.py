@@ -185,12 +185,18 @@ class CellModel:
         scale = max(1.0 - 0.005 * delta_t, 0.5)
         return cfg.r0 * scale, cfg.r1 * scale, cfg.c1, cfg.r2 * scale, cfg.c2
 
-    def get_ekf_matrices(self, current: float, dt: float):
+    def get_ekf_matrices(self, current: float, dt: float, soc: Optional[float] = None):
         """
         Return (F, H, ocv, r0) needed by the EKF at the current operating point.
         F  — state transition Jacobian (3×3)
         H  — measurement Jacobian (1×3)
+
+        ``soc`` is the linearisation point. An estimator must pass its own
+        (predicted) SOC estimate here; the default falls back to the plant's
+        true SOC, which only a simulation can know.
         """
+        if soc is None:
+            soc = self._soc
         r0, r1, c1, r2, c2 = self._param_at_temp()
         tau1 = r1 * c1
         tau2 = r2 * c2
@@ -203,8 +209,8 @@ class CellModel:
             [0.0, 0.0, alpha2],
         ])
 
-        dOCV_dSOC = docv_dsoc(self._soc, table=self._ocv_table)
+        dOCV_dSOC = docv_dsoc(soc, table=self._ocv_table)
         H = np.array([[dOCV_dSOC, -1.0, -1.0]])
 
-        ocv = self.ocv_for_soc(self._soc)
+        ocv = self.ocv_for_soc(soc)
         return F, H, ocv, r0

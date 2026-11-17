@@ -66,6 +66,7 @@ class SOHEstimator:
         # Previous step values for ΔV/ΔI estimation
         self._prev_current = 0.0
         self._prev_voltage = 0.0
+        self._has_prev = False   # no dV/dI measurement possible before a first sample
 
     # ------------------------------------------------------------------
 
@@ -100,7 +101,7 @@ class SOHEstimator:
 
         # R0 estimation via current-step ΔV/ΔI
         delta_i = current - self._prev_current
-        if abs(delta_i) > 1.0:                           # only when step > 1 A
+        if self._has_prev and abs(delta_i) > 1.0:        # only when step > 1 A
             delta_v = self._prev_voltage - v_terminal    # voltage drops on discharge
             r0_meas = abs(delta_v / delta_i) if abs(delta_i) > 0 else self._r0_est
             r0_meas = float(np.clip(r0_meas, 0.0, 0.05))   # sanity bounds
@@ -111,6 +112,7 @@ class SOHEstimator:
 
         self._prev_current = current
         self._prev_voltage = v_terminal
+        self._has_prev = True
 
         return SOHState(
             soh_capacity_pct=soh_q,

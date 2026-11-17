@@ -221,6 +221,7 @@ class BMSController:
             temperature=t_max,
             v_pack=pack_voltage,
             soh_pct=soh_state.soh_capacity_pct,
+            temperature_min=t_min,
         )
 
         # Supervisory state machine
@@ -233,6 +234,7 @@ class BMSController:
             v_spread=bal_state.v_spread,
             charge_requested=charge_requested,
             discharge_requested=discharge_requested,
+            t_cell_min=t_min,
         )
 
         # Thermal management / fan controller
