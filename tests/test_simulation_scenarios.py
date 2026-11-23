@@ -105,3 +105,47 @@ class TestDrivingAndManufacturers:
     def test_manufacturer_comparison_runs(self, capsys):
         sim.simulate_manufacturer_comparison(simulation_years=2)
         assert "MANUFACTURER BMS COMPARISON" in capsys.readouterr().out
+
+
+def _state(soc=0.5, spread=1.0, vmax=3.0, imax_dis=50.0, imax_chg=-50.0, fault=False):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        pack_soc_mean=soc, cell_voltages_v=[vmax], pack_voltage_v=50.0, pack_temp_max_c=25.0,
+        balancing=SimpleNamespace(v_spread=spread), fault_active=fault, fault_description="NONE",
+        soh=SimpleNamespace(soh_capacity_pct=99.0), thermal=SimpleNamespace(fan_pwm_pct=0.0),
+        power_limits=SimpleNamespace(i_max_discharge=imax_dis, i_max_charge=imax_chg))
+
+
+class TestScenarioBoundaries:
+    def test_status_at_exact_critical_threshold_is_warning(self):
+        crit = TWO_WHEELER.pack_cfg.soh_critical_pct
+        hist = sim.simulate_degradation(TWO_WHEELER, n_cycles=1, deg_rate=(100.0 - crit) / 100.0, print_every=1)
+        assert hist[0]["soh_capacity_pct"] == crit and hist[0]["status"] == "WARNING"
+
+    def test_phase_boundaries_with_fake_controller(self, monkeypatch):
+        socs = iter([0.95] + [0.5] * 7 + [0.05, 0.5])      # charge stops at 95 %, discharge at 5 % (both inclusive)
+
+        class FakeBms:
+            def step(self, current, dt, charge_requested=False, discharge_requested=False):
+                return _state(soc=next(socs))
+
+        monkeypatch.setattr(sim, "make_bms_controller", lambda *a, **k: FakeBms())
+        monkeypatch.setattr(sim, "_header", lambda p: None)
+        monkeypatch.setattr(sim, "_row", lambda *a: None)
+        hist = sim._simulate_charge_discharge(TWO_WHEELER, charge_s=7, discharge_s=50, print_interval=10**9)
+        # 1 charge tick + min(300, charge_s) = 7 balancing ticks + 1 discharge tick
+        assert len(hist) == 1 + 7 + 1
+
+    def test_power_limits_sampled_at_tick_seven(self, monkeypatch):
+        class FakeBms:
+            def __init__(self):
+                self.k = -1
+
+            def step(self, current, dt, discharge_requested=False):
+                self.k += 1
+                blocked = self.k == 7
+                return _state(imax_dis=0.0 if blocked else 50.0, imax_chg=0.0 if blocked else -50.0)
+
+        monkeypatch.setattr(sim, "make_bms_controller", lambda *a, **k: FakeBms())
+        res = sim.simulate_cold_temperature(TWO_WHEELER, ambient_temps_c=[10.0], max_discharge_s=12)
+        assert res[10.0]["discharge_blocked"] is True and res[10.0]["charge_blocked"] is True
