@@ -29,3 +29,5 @@ uploads/
 .env.providers
 .env
 data/kaggle/bms_v21/BMS-Datav2/*.npy
+.coverage
+coverage.xml
